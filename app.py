@@ -480,7 +480,7 @@ elif page == "Screener":
                 if "Sin datos" in str(val): return "color: #fbbf24"
                 return "color: #888898"
 
-            styled = df_res.style.applymap(color_signal, subset=["Señal"])
+            styled = df_res.style.map(color_signal, subset=["Señal"])
             st.dataframe(styled, use_container_width=True, hide_index=True)
 
             # Detail chart for selected ticker
