@@ -92,6 +92,25 @@ def get_alerts(adf, cdf, cid):
             alerts.append(("🟡", f"{a['ticker']} (Cripto) no recomendado para perfil Conservador"))
     return alerts
 
+def auto_update_prices(sb, assets_df):
+    """Trae el último precio de Yahoo Finance y actualiza Supabase. Devuelve (ok, fail)."""
+    unique_tickers = assets_df.drop_duplicates(subset="ticker")[["id","ticker","currency"]]
+    ok, fail = [], []
+    for _, row in unique_tickers.iterrows():
+        ticker = row["ticker"]
+        try:
+            data = yf.download(ticker, period="2d", interval="1d", progress=False, auto_adjust=True)
+            if data.empty: fail.append(ticker); continue
+            if isinstance(data.columns, pd.MultiIndex): data.columns = data.columns.get_level_values(0)
+            price = float(data["Close"].dropna().iloc[-1])
+            ids = assets_df[assets_df["ticker"]==ticker]["id"].tolist()
+            for aid in ids:
+                sb.table("assets").update({"price_current": round(price,4)}).eq("id", str(aid)).execute()
+            ok.append(f"{ticker} → {price:,.2f}")
+        except Exception:
+            fail.append(ticker)
+    return ok, fail
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_indicators(ticker: str):
     try:
@@ -206,6 +225,21 @@ if page == "Dashboard":
     else:
         c1.metric("AUM","—"); c2.metric("Clientes","0"); c3.metric("Alertas","—"); c4.metric("Rend.","—")
     st.markdown("---")
+
+    # Auto-update prices button
+    col_upd, col_info = st.columns([1,3])
+    if col_upd.button("↻ Actualizar precios", type="primary", help="Trae el último precio de Yahoo Finance para todos los activos"):
+        if not assets_df.empty:
+            with st.spinner("Actualizando precios..."):
+                ok, fail = auto_update_prices(sb, assets_df)
+            if ok:
+                st.success(f"✓ Actualizados: {', '.join(ok)}")
+            if fail:
+                st.warning(f"⚠ Sin datos (actualizar manual): {', '.join(fail)}")
+            st.rerun()
+        else:
+            st.info("Sin activos para actualizar.")
+
     with st.expander("➕ Nuevo cliente"):
         with st.form("nc"):
             x1,x2 = st.columns(2)
@@ -296,7 +330,16 @@ elif page == "Clientes":
                     "Valor USD": fmt_usd(asset_val_usd(a,mep)), "Rend.":f"{r:+.1f}%"})
             st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
 
-            with st.expander("✏ Actualizar precio actual"):
+            # Auto-update prices for this client
+            ca1, ca2 = st.columns([1,3])
+            if ca1.button("↻ Actualizar precios", type="primary", key=f"upd_auto_{cid}"):
+                with st.spinner("Actualizando..."):
+                    ok, fail = auto_update_prices(sb, cas)
+                if ok:   st.success(f"✓ {', '.join(ok)}")
+                if fail: st.warning(f"⚠ Sin datos en Yahoo (manual): {', '.join(fail)}")
+                st.rerun()
+
+            with st.expander("✏ Actualizar precio manual"):
                 with st.form(f"upd_{cid}"):
                     upd_t = st.selectbox("Activo",cas["ticker"].tolist())
                     upd_r = cas[cas["ticker"]==upd_t].iloc[0]
