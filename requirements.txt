@@ -1,7 +1,7 @@
-streamlit
-supabase
-yfinance
-pandas-ta
-pandas
-numpy
-plotly
+streamlit>=1.32.0
+supabase>=2.3.0
+yfinance>=0.2.37
+pandas-ta==0.3.14b
+pandas==2.1.4
+numpy==1.26.4
+plotly>=5.18.0
