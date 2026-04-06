@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas_ta as ta
+import ta as ta_lib
 from supabase import create_client
 from datetime import datetime
 import plotly.graph_objects as go
@@ -103,21 +103,19 @@ def fetch_indicators(ticker: str):
         low   = df["Low"].dropna()
         vol   = df["Volume"].dropna()
 
-        # Technical indicators via pandas_ta
-        df["RSI"]    = ta.rsi(close, length=14)
-        df["EMA50"]  = ta.ema(close, length=50)
-        df["EMA200"] = ta.ema(close, length=200)
+        # Technical indicators via ta library
+        df["RSI"]    = ta_lib.momentum.RSIIndicator(close, window=14).rsi()
+        df["EMA50"]  = ta_lib.trend.EMAIndicator(close, window=50).ema_indicator()
+        df["EMA200"] = ta_lib.trend.EMAIndicator(close, window=200).ema_indicator()
 
-        macd_df = ta.macd(close, fast=12, slow=26, signal=9)
-        if macd_df is not None and not macd_df.empty:
-            df["MACD"] = macd_df.iloc[:, 0]
-            df["MACD_signal"] = macd_df.iloc[:, 2]
+        macd_obj = ta_lib.trend.MACD(close, window_slow=26, window_fast=12, window_sign=9)
+        df["MACD"]       = macd_obj.macd()
+        df["MACD_signal"] = macd_obj.macd_signal()
 
-        boll_df = ta.bbands(close, length=20, std=2)
-        if boll_df is not None and not boll_df.empty:
-            df["BB_upper"] = boll_df.iloc[:, 0]
-            df["BB_mid"]   = boll_df.iloc[:, 1]
-            df["BB_lower"] = boll_df.iloc[:, 2]
+        boll_obj = ta_lib.volatility.BollingerBands(close, window=20, window_dev=2)
+        df["BB_upper"] = boll_obj.bollinger_hband()
+        df["BB_mid"]   = boll_obj.bollinger_mavg()
+        df["BB_lower"] = boll_obj.bollinger_lband()
 
         last = df.iloc[-1]
         price = float(last["Close"])
